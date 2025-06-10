@@ -1,5 +1,6 @@
      #include <X11/Xlib.h>
      #include <stdio.h>
+     #include <string.h>
      #include <stdlib.h>
      #include<unistd.h>
 
@@ -8,7 +9,10 @@
          Display *display;
          Window window;
          XEvent event;
-
+         DEBUG_LINE
+	 //XFontStruct *font24 = XLoadQueryFont(display,"lucidasanstypewriter-bold-24");
+         DEBUG_LINE
+         //XFontStruct *ft = font24;
          display = XOpenDisplay(NULL);
          if (display == NULL) {
              fprintf(stderr, "Cannot open display\n");
@@ -32,7 +36,9 @@
          DEBUG_LINE
 		 //XSetFont (display, DefaultGC(display,screen), ft->fid);
          DEBUG_LINE
-                 XDrawString(display, window, DefaultGC(display, screen), 50, 50, "Hello World", 11);
+	         char str [] = "NO VIDEO SIGNAL";
+	         XSetForeground(display, DefaultGC(display, screen), 0x92D050);
+                 XDrawString(display, window, DefaultGC(display, screen), 200, 250, str, strlen(str));
              }
              if (event.type == KeyPress)
                  break;
