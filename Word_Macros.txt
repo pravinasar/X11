@@ -1,0 +1,258 @@
+
+Sub AddCaptionsToAllImages()
+    Dim shp As Shape
+    Dim ils As InlineShape
+    Dim capText As String
+    Dim imgCount As Long
+    Dim rng As Range
+    
+    imgCount = 0
+    
+    On Error GoTo ErrHandler
+
+
+    ' Loop through inline shapes (images in text flow)
+    For Each ils In ActiveDocument.InlineShapes
+        imgCount = imgCount + 1
+        capText = "Figure " & imgCount & ": " & ils.AlternativeText
+        capText = ": " & ils.AlternativeText
+        ' You can customize caption text here
+        ils.Select
+        Selection.InsertCaption label:="Figure", TitleAutoText:="", _
+            Title:=capText, Position:=wdCaptionPositionBelow, ExcludeLabel:=False
+        Set rng = Selection.Paragraphs(1).Range
+            rng.ParagraphFormat.Alignment = wdAlignParagraphCenter
+    Next ils
+    
+    ' Loop through floating shapes (wrapped images)
+    For Each shp In ActiveDocument.Shapes
+        If shp.Type = msoPicture Or shp.Type = msoLinkedPicture Then
+            imgCount = imgCount + 1
+            capText = "Figure " & imgCount & ": " & shp.AlternativeText
+            shp.Select
+            Selection.InsertCaption label:="Figure", TitleAutoText:="", _
+                Title:=capText, Position:=wdCaptionPositionBelow, ExcludeLabel:=False
+            Set rng = Selection.Paragraphs(1).Range
+            rng.ParagraphFormat.Alignment = wdAlignParagraphCenter
+        End If
+    Next shp
+    
+    MsgBox imgCount & " captions added successfully.", vbInformation
+    
+    Exit Sub
+    
+ErrHandler:
+    MsgBox "An error occurred: " & Err.Description, vbExclamation
+End Sub
+
+
+
+Sub RemoveImageCaptions()
+    Dim para As Paragraph
+    Dim shp As Shape
+    Dim ils As InlineShape
+    Dim rng As Range
+    
+    ' Remove captions linked to inline shapes (pictures in text flow)
+    For Each ils In ActiveDocument.InlineShapes
+        If Not ils.Range.Next Is Nothing Then
+            Set rng = ils.Range.Next.Paragraphs(1).Range
+            ' Check if paragraph contains a caption label
+            If InStr(1, rng.Text, "Figure", vbTextCompare) > 0 _
+               Or InStr(1, rng.Text, "Fig.", vbTextCompare) > 0 Then
+                rng.Delete
+            End If
+        End If
+    Next ils
+    
+    ' Remove captions linked to floating shapes
+    For Each shp In ActiveDocument.Shapes
+        If shp.Type = msoPicture Or shp.Type = msoLinkedPicture Then
+            If Not shp.Anchor.Next Is Nothing Then
+                Set rng = shp.Anchor.Next.Paragraphs(1).Range
+                If InStr(1, rng.Text, "Figure", vbTextCompare) > 0 _
+                   Or InStr(1, rng.Text, "Fig.", vbTextCompare) > 0 Then
+                    rng.Delete
+                End If
+            End If
+        End If
+    Next shp
+    
+    ' Optional: Remove any standalone caption fields
+    For Each para In ActiveDocument.Paragraphs
+        If para.Range.Fields.Count > 0 Then
+            If para.Range.Fields(1).Type = wdFieldSequence Then
+                para.Range.Delete
+            End If
+        End If
+    Next para
+    
+    MsgBox "All image captions removed.", vbInformation
+End Sub
+
+Sub AddCaptionsToAllTables()
+    Dim tbl As Table
+    Dim tblIndex As Long
+    Dim captionText As String
+    Dim rng As Range
+    
+    On Error GoTo ErrHandler
+    
+    ' Loop through each table in the document
+    For tblIndex = 1 To ActiveDocument.Tables.Count
+        Set tbl = ActiveDocument.Tables(tblIndex)
+        
+        ' Check if the table already has a caption (by looking at the paragraph before it)
+        Set rng = tbl.Range
+        rng.Collapse Direction:=wdCollapseStart
+        rng.MoveStart Unit:=wdParagraph, Count:=-1
+        
+        ' Add caption above the table
+        tbl.Range.Select
+        Selection.MoveUp Unit:=wdLine, Count:=1
+        Selection.InsertCaption _
+            label:="Table", _
+            Title:=" " & "Add Table Caption Here", _
+            Position:=wdCaptionPositionAbove, _
+            ExcludeLabel:=False
+        Set rng = Selection.Paragraphs(1).Range
+        rng.ParagraphFormat.Alignment = wdAlignParagraphCenter
+
+    Next tblIndex
+    
+    MsgBox "Captions added to all tables successfully.", vbInformation
+    Exit Sub
+    
+ErrHandler:
+    MsgBox "An error occurred: " & Err.Description, vbCritical
+End Sub
+
+Sub RemoveTableCaptions()
+    Dim para As Paragraph
+    Dim paraText As String
+    Dim i As Long
+    
+    ' Turn off screen updating for speed
+    Application.ScreenUpdating = False
+    
+    ' Loop backwards to avoid index shifting when deleting
+    For i = ActiveDocument.Paragraphs.Count To 1 Step -1
+        paraText = Trim(ActiveDocument.Paragraphs(i).Range.Text)
+        
+        ' Check if paragraph starts with "Table" (case-insensitive)
+        If LCase(Left(paraText, 5)) = "table" Then
+            ' Delete the paragraph (caption) and its trailing paragraph mark
+            ActiveDocument.Paragraphs(i).Range.Delete
+        End If
+    Next i
+    
+    Application.ScreenUpdating = True
+    MsgBox "All table captions removed.", vbInformation
+End Sub
+
+Sub CreateOrUpdateTableOfTables()
+    Dim doc As Document
+    Set doc = ActiveDocument
+    
+    On Error GoTo ErrHandler
+    
+    ' If a Table of Tables already exists, update it
+    If doc.TablesOfFigures.Count > 0 Then
+        Dim tof As TableOfFigures
+        For Each tof In doc.TablesOfFigures
+            ' Check if this TOF is for "Table" captions
+            If tof.Caption = "Table" Then
+                tof.Update
+                MsgBox "Table of Tables updated successfully.", vbInformation
+                Exit Sub
+            End If
+        Next
+    End If
+    
+    ' If not found, create a new Table of Tables at the start of the document
+    doc.Range(0, 0).InsertBreak Type:=wdPageBreak
+    doc.TablesOfFigures.Add Range:=doc.Range(0, 0), Caption:="Table", _
+        IncludeLabel:=True, UseHeadingStyles:=False, RightAlignPageNumbers:=True, _
+        IncludePageNumbers:=True
+    
+    MsgBox "Table of Tables created successfully.", vbInformation
+    Exit Sub
+    
+ErrHandler:
+    MsgBox "Error: " & Err.Description, vbCritical
+End Sub
+
+
+Sub CreateOrUpdateTableOfFigures()
+    Dim toc As TableOfFigures
+    Dim rng As Range
+    
+    On Error GoTo ErrHandler
+    
+    ' Define where to insert the Table of Figures (top of document here)
+    Set rng = ActiveDocument.Range(0, 0)
+    
+    ' If a Table of Figures already exists, update it
+    If ActiveDocument.TablesOfFigures.Count > 0 Then
+        For Each toc In ActiveDocument.TablesOfFigures
+            toc.Update
+        Next toc
+        MsgBox "Existing Table(s) of Figures updated.", vbInformation
+    Else
+        'Create a new Table of Figures
+        ActiveDocument.TablesOfFigures.Add _
+            Range:=rng, _
+            Caption:="Figure", _
+            IncludeLabel:=True, _
+            UseHeadingStyles:=False, _
+            RightAlignPageNumbers:=True, _
+            IncludePageNumbers:=True
+        
+        MsgBox "Table of Figures created at the start of the document.", vbInformation
+    End If
+    
+    Exit Sub
+    
+ErrHandler:
+    MsgBox "Error: " & Err.Description, vbCritical
+End Sub
+
+Sub CreateTableOfContents()
+Dim myRange As Range
+
+' Define the range for the TOC (start of document)
+Set myRange = ActiveDocument.Range(Start:=0, End:=0)
+
+' Add Table of Contents
+ActiveDocument.TablesOfContents.Add _
+Range:=myRange, _
+UseHeadingStyles:=True, _
+UpperHeadingLevel:=1, _
+LowerHeadingLevel:=3, _
+UseHyperlinks:=True, _
+IncludePageNumbers:=True
+
+' Update TOC to ensure it reflects current content
+ActiveDocument.TablesOfContents(1).Update
+End Sub
+
+Sub DeleteAllTablesOfContents()
+    On Error GoTo ErrorHandler
+    
+    Dim toc As TableOfContents
+    
+    ' Loop backwards to avoid index shifting when deleting
+    For i = ActiveDocument.TablesOfContents.Count To 1 Step -1
+        ActiveDocument.TablesOfContents(i).Delete
+    Next i
+    
+    MsgBox "All Tables of Contents have been deleted.", vbInformation
+    
+    Exit Sub
+    
+ErrorHandler:
+    MsgBox "An error occurred while deleting the Table(s) of Contents: " & Err.Description, vbExclamation
+End Sub
+
+
+
